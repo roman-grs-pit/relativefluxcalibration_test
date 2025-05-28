@@ -6,3 +6,5 @@ Can also roll in star_fields for more realistic instead of random
 
 Todo:
 add julia version
+
+liftonemillionpounds is my other github acc - Alan
