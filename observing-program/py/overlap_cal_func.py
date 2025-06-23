@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.optimize import minimize
 from chi2_func import *
+import time
 
 def find_overlaps(exp, exists_in_exp, Nstars):
     # For each star j, collect the list of exposures containing it 
@@ -17,7 +18,7 @@ def find_overlaps(exp, exists_in_exp, Nstars):
     }
     overlaps = [list(pat) for pat in unique_patterns]
     # For each overlap pattern, build a boolean mask (length Nstars)
-    # that is True exactly where in_detector[j] == that pattern.
+    # that is True where in_detector[j] == that pattern.
     select_overlaps = []
     for pat in overlaps:
         # build a boolean array of shape (Nexp,) marking which exposures are in this pattern
@@ -43,22 +44,24 @@ def run_calibration(star_wvl_dict, exp, stars_obs, sig_ij, sig_k, true_brightnes
         starids = star_wvl_dict[lam][:,1]
 
         exists_in_exp = np.zeros((Nexp, Nstars), dtype=bool)
-
+    
         for f, s in zip(fids, starids):
             exists_in_exp[int(f-1),int(s)] = True
-
+        
         m_ij = [true_brightness for _ in range(Nexp)]
         m_ij = np.array(m_ij)
         m_ij = np.where(exists_in_exp, true_brightness - true_k[:,None], 0.0)
-        m_ij *= throughput[lam_id]
-
+        m_ij *= np.tile(throughput[:,lam_id], int(Nexp/18))[:,None]
+    
         select_overlaps, Nl = find_overlaps(exp, exists_in_exp, Nstars)
         Nstarl = np.array([len(stars_obs[select_overlaps[l]]) for l in range(Nl)])
-        
-        m_il = np.zeros((len(exp), Nl))#this could probably be optimised like m_ij
-        for i in range(len(exp)):
-          for l in range(Nl):
-            m_il[i,l] = np.mean(m_ij[i,:][select_overlaps[l]])
+
+        # Stack overlap masks: shape (Nl, Nstars)
+        overlap_mask = np.vstack(select_overlaps)  # shape (Nl, Nstars)
+        # insert an i axis to overlap_mask and a l axis to m_ij
+        masked = np.where(overlap_mask[None, :, :], m_ij[:, None, :], np.nan)  # shape (Nexp, Nl, Nstars)
+        # Compute mean over stars axis (axis=2), ignoring NaNs
+        m_il = np.nanmean(masked, axis=2)  # shape (Nexp, Nl)
 
         k_test = np.zeros(len(exp))
         resL_vec = minimize(chi2L_vec, k_test, method='L-BFGS-B', args=(m_il, sig_ij/np.sqrt(Nstarl), sig_k), jac = True)
