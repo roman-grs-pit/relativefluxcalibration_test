@@ -33,7 +33,7 @@ def find_overlaps(exp, exists_in_exp, Nstars):
     # shape (Nl, Nstars)
 
 
-def run_calibration(star_wvl_dict, exp, stars_obs, sig_ij, sig_k, true_brightness, true_k, throughput):
+def run_calibration_3d(star_wvl_dict, exp, stars_obs, sig_ij, sig_k, true_brightness, true_k, throughput):
     lambda_bins = np.array([k for k in star_wvl_dict.keys()]) 
     calibration_array = np.zeros((len(lambda_bins), len(exp)))
     Nstars = len(stars_obs)
@@ -52,6 +52,44 @@ def run_calibration(star_wvl_dict, exp, stars_obs, sig_ij, sig_k, true_brightnes
         m_ij = np.array(m_ij)
         m_ij = np.where(exists_in_exp, true_brightness - true_k[:,None], 0.0)
         m_ij *= np.tile(throughput[:,lam_id], int(Nexp/18))[:,None]
+    
+        select_overlaps, Nl = find_overlaps(exp, exists_in_exp, Nstars)
+        Nstarl = np.array([len(stars_obs[select_overlaps[l]]) for l in range(Nl)])
+
+        # Stack overlap masks: shape (Nl, Nstars)
+        overlap_mask = np.vstack(select_overlaps)  # shape (Nl, Nstars)
+        # insert an i axis to overlap_mask and a l axis to m_ij
+        masked = np.where(overlap_mask[None, :, :], m_ij[:, None, :], np.nan)  # shape (Nexp, Nl, Nstars)
+        # Compute mean over stars axis (axis=2), ignoring NaNs
+        m_il = np.nanmean(masked, axis=2)  # shape (Nexp, Nl)
+
+    k_test = np.zeros(len(exp))
+    resL_vec = minimize(chi2L_vec, k_test, method='L-BFGS-B', args=(m_il, sig_ij/np.sqrt(Nstarl), sig_k), jac = True)
+    calibration_array[row] = resL_vec.x
+    row += 1
+    return calibration_array
+
+
+
+def run_calibration(star_wvl_dict, exp, stars_obs, sig_ij, sig_k, true_brightness, true_k, throughput):
+    lambda_bins = np.array([k for k in star_wvl_dict.keys()]) 
+    calibration_array = np.zeros((len(lambda_bins), len(exp)))
+    Nstars = len(stars_obs)
+    Nexp = len(exp)
+    row = 0
+    for lam_id, lam in enumerate(star_wvl_dict.keys()):
+        fids = star_wvl_dict[lam][:,0]
+        starids = star_wvl_dict[lam][:,1]
+
+        exists_in_exp = np.zeros((Nexp, Nstars), dtype=bool)
+    
+        for f, s in zip(fids, starids):
+            exists_in_exp[int(f-1),int(s)] = True
+        
+        m_ij = [true_brightness for _ in range(Nexp)]
+        m_ij = np.array(m_ij)
+        m_ij = np.where(exists_in_exp, true_brightness - true_k[:,None], 0.0)
+        # m_ij += np.tile(throughput[:,lam_id], int(Nexp/18))[:,None]
     
         select_overlaps, Nl = find_overlaps(exp, exists_in_exp, Nstars)
         Nstarl = np.array([len(stars_obs[select_overlaps[l]]) for l in range(Nl)])
