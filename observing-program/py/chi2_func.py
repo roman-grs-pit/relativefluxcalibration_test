@@ -72,7 +72,7 @@ def chi2L_vec(ki, m_il, sig_l, sig_k):
     # zero out invalid positions
     res *= nonzero_mask
 
-    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum((ki)**2) / sig_k**2
+    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum((ki-2)**2) / sig_k**2
 
     ######
     ###### compute gradient
@@ -80,7 +80,7 @@ def chi2L_vec(ki, m_il, sig_l, sig_k):
 
     g_term1 = (-2/Nd)*np.sum(res**2 / sig_l[None, :]**2)
     g_term2 = 2*np.sum(res/sig_l[None, :]**2, axis = 1)
-    g_term3 = 2*(ki)/sig_k**2
+    g_term3 = 2*(ki-2)/sig_k**2
 
     gradient = g_term1 + g_term2 + g_term3
 
@@ -95,6 +95,8 @@ def chi2L_3D(ki, m_il, sig_l, sig_k):
     """
 
     Nd, Nl = m_il.shape
+    ki1 = ki[:Nd]  # shape (Nd,)
+    ki2 = ki[Nd:]  # shape (Nd,)
 
     ######
     ###### compute chi2
@@ -102,7 +104,7 @@ def chi2L_3D(ki, m_il, sig_l, sig_k):
 
     nonzero_mask = (m_il != 0)                # shape (Nd, Nl)
 
-    mc_il = np.where(nonzero_mask, m_il + ki[:, None], 0.0) #mask selects non-zero entries, adds ki by column and zeros the correct entries
+    mc_il = np.where(nonzero_mask, m_il + ki1[:, None] + ki2[:, None], 0.0) #mask selects non-zero entries, adds ki by column and zeros the correct entries
 
     counts = nonzero_mask.sum(axis=0)         # shape (Nl,)
     # avoid division-by-zero if some column is all zeros
@@ -116,7 +118,7 @@ def chi2L_3D(ki, m_il, sig_l, sig_k):
     # zero out invalid positions
     res *= nonzero_mask
 
-    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum(ki**2) / sig_k**2
+    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum(ki1**2) / sig_k**2 + np.sum((ki2)**2) / sig_k**2
 
     ######
     ###### compute gradient
@@ -124,7 +126,7 @@ def chi2L_3D(ki, m_il, sig_l, sig_k):
 
     g_term1 = (-2/Nd)*np.sum(res**2 / sig_l[None, :]**2)
     g_term2 = 2*np.sum(res/sig_l[None, :]**2, axis = 1)
-    g_term3 = 2*ki/sig_k**2
+    g_term3 = 2*ki1/sig_k**2 + 2*(ki2)/sig_k**2
 
     gradient = g_term1 + g_term2 + g_term3
 
