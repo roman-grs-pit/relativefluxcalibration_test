@@ -26,7 +26,7 @@ def chi2J_vec(ki, m_ij, sig_j, sig_k):
     # zero out invalid positions
     res *= nonzero_mask
 
-    chi2 = np.sum(res**2 / sig_j**2) + np.sum(ki**2) / sig_k**2
+    chi2 = np.sum(res**2 / sig_j**2) + np.sum((ki)**2) / sig_k**2
 
     ######
     ###### compute gradient
@@ -34,12 +34,43 @@ def chi2J_vec(ki, m_ij, sig_j, sig_k):
 
     g_term1 = (-2/Nd)*np.sum(res**2 / sig_j**2)
     g_term2 = 2*np.sum(res, axis = 1) / sig_j**2
-    g_term3 = 2*ki/sig_k**2
+    g_term3 = 2*(ki)/sig_k**2
 
     gradient = g_term1 + g_term2 + g_term3
 
     # return chi2 and gradient
     return chi2, gradient
+
+def chi2J_lam(klam, m_lamj, sig_j, sig_k):
+    """
+    klam:   shape (Nlam,)
+    m_lamj: shape (Nlam, Nj)
+    sig_j: scalar
+    sig_k: scalar
+    """
+    Nlam, Nj = m_lamj.shape
+
+    ######
+    ###### compute chi2
+    ######
+
+    nonzero_mask = (m_lamj != 0)                # shape (Nd, Nj)
+
+    mc_lamj = np.where(nonzero_mask, m_lamj + klam[:, None], 0.0) #mask selects non-zero entries, adds ki by column and zeros the correct entries
+    counts = nonzero_mask.sum(axis=0)         # shape (Nj,)
+    # avoid division-by-zero if some column is all zeros
+    counts = np.where(counts == 0, 1, counts)
+    col_sums = mc_lamj.sum(axis=0)    # shape (Nj,)
+    mc_j = col_sums / counts          # shape (Nj,)
+
+    res = mc_lamj - mc_j[None, :]
+    # zero out invalid positions
+    res *= nonzero_mask
+
+    chi2 = np.sum(res**2 / sig_j**2) + np.sum((klam)**2) / sig_k**2
+
+    # return chi2 and gradient
+    return chi2
 
 
 def chi2L_vec(ki, m_il, sig_l, sig_k):
@@ -47,7 +78,7 @@ def chi2L_vec(ki, m_il, sig_l, sig_k):
     ki:   shape (Nd,)
     m_il: shape (Nd, Nl)
     sig_l: shape (Nl,)
-    sigk: scalar
+    sig_k: scalar
     """
 
     Nd, Nl = m_il.shape
@@ -72,7 +103,7 @@ def chi2L_vec(ki, m_il, sig_l, sig_k):
     # zero out invalid positions
     res *= nonzero_mask
 
-    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum((ki-2)**2) / sig_k**2
+    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum((ki)**2) / sig_k**2
 
     ######
     ###### compute gradient
@@ -86,48 +117,37 @@ def chi2L_vec(ki, m_il, sig_l, sig_k):
 
     return chi2, gradient
 
-def chi2L_3D(ki, m_il, sig_l, sig_k):
+def chi2J_3D(kilam, m_ijlam, sig_j, sig_k):
     """
     ki:   shape (Nd,)
-    m_il: shape (Nd, Nl)
-    sig_l: shape (Nl,)
+    m_ijlam: shape (Nd, Nstars, Nlam)
     sigk: scalar
     """
 
-    Nd, Nl = m_il.shape
-    ki1 = ki[:Nd]  # shape (Nd,)
-    ki2 = ki[Nd:]  # shape (Nd,)
+    Nd, Nj, Nlam = m_ijlam.shape
+
+    kilam = kilam.reshape(Nd, Nlam) 
 
     ######
     ###### compute chi2
     ######
 
-    nonzero_mask = (m_il != 0)                # shape (Nd, Nl)
+    nonzero_mask = (m_ijlam != 0)                
 
-    mc_il = np.where(nonzero_mask, m_il + ki1[:, None] + ki2[:, None], 0.0) #mask selects non-zero entries, adds ki by column and zeros the correct entries
+    mc_ijlam = np.where(nonzero_mask, m_ijlam + kilam[:, None, :], 0.0) #mask selects non-zero entries, adds ki by column and zeros the correct entries
 
-    counts = nonzero_mask.sum(axis=0)         # shape (Nl,)
+    counts = nonzero_mask.sum(axis=0)         # shape (Nj, Nlam)
     # avoid division-by-zero if some column is all zeros
     counts = np.where(counts == 0, 1, counts)
-    col_sums = mc_il.sum(axis=0)    # shape (Nl,)
-    mc_l = col_sums / counts          # shape (Nl,)
+    col_sums = mc_ijlam.sum(axis=0)    # shape (Nj, Nlam)
+    mc_jlam = col_sums / counts          # shape (Nj, Nlam)
 
     # 4) residuals only where mask is True
     #    (shifted - mc_l) has shape (Nd, Nl)
-    res = mc_il - mc_l[None, :]
+    res = mc_ijlam - mc_jlam[None, :, :]
     # zero out invalid positions
     res *= nonzero_mask
 
-    chi2 = np.sum(res**2 / sig_l[None, :]**2) + np.sum(ki1**2) / sig_k**2 + np.sum((ki2)**2) / sig_k**2
+    chi2 = np.sum(res**2 / sig_j**2) + np.sum(kilam**2) / sig_k**2
 
-    ######
-    ###### compute gradient
-    ######
-
-    g_term1 = (-2/Nd)*np.sum(res**2 / sig_l[None, :]**2)
-    g_term2 = 2*np.sum(res/sig_l[None, :]**2, axis = 1)
-    g_term3 = 2*ki1/sig_k**2 + 2*(ki2)/sig_k**2
-
-    gradient = g_term1 + g_term2 + g_term3
-
-    return chi2, gradient
+    return chi2
