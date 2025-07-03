@@ -41,7 +41,7 @@ def chi2J_vec(ki, m_ij, sig_j, sig_k):
     # return chi2 and gradient
     return chi2, gradient
 
-def chi2J_lam(klam, m_lamj, sig_j, sig_k):
+def chi2J_lam(klam, m_lamj, sig_j, sig_klam):
     """
     klam:   shape (Nlam,)
     m_lamj: shape (Nlam, Nj)
@@ -67,10 +67,20 @@ def chi2J_lam(klam, m_lamj, sig_j, sig_k):
     # zero out invalid positions
     res *= nonzero_mask
 
-    chi2 = np.sum(res**2 / sig_j**2) + np.sum((klam)**2) / sig_k**2
+    chi2 = np.sum(res**2 / sig_j**2) + np.sum((klam)**2) / sig_klam**2
+
+    ######
+    ###### compute gradient
+    ######
+
+    g_term1 = (-2/Nlam)*np.sum(res**2 / sig_j**2)
+    g_term2 = 2*np.sum(res, axis = 1) / sig_j**2
+    g_term3 = 2*(klam)/sig_klam**2
+
+    gradient = g_term1 + g_term2 + g_term3
 
     # return chi2 and gradient
-    return chi2
+    return chi2, gradient
 
 
 def chi2L_vec(ki, m_il, sig_l, sig_k):
